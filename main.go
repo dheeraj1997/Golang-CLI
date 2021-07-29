@@ -24,38 +24,50 @@ type Task struct {
 }
 
 func addTask(arg string, dbConn *sqlx.DB)  {
-    addTaskEntry, _ := dbConn.Prepare("INSERT INTO `tasks` (`description`, `status`) VALUES (?,?)")
-    _, err := addTaskEntry.Exec(arg, Pending)
-    if err != nil {
-        panic(err.Error())
-    }
-    fmt.Printf("Added \"%s\" to your task list.\n", arg)
-}
-
-func doTask(arg int, dbConn *sqlx.DB) {
-    stmt, _ := dbConn.Prepare("Select * from tasks where id = ?")
-    taskRes, err := stmt.Query(arg)
-    if err != nil {
-        panic(err.Error())
-    }
-    task := Task{}
-    if taskRes.Next() {
-        err = taskRes.Scan(&task.Id, &task.Description, &task.Status)
+    if arg == "--help" {
+        fmt.Println("  task add \"task_description\"         Add a new task to your TODO list")
+    } else {
+        addTaskEntry, _ := dbConn.Prepare("INSERT INTO `tasks` (`description`, `status`) VALUES (?,?)")
+        _, err := addTaskEntry.Exec(arg, Pending)
         if err != nil {
             panic(err.Error())
         }
-        if task.Status != Done {
-            stmt, _ = dbConn.Prepare("UPDATE tasks set status = ? where id = ?")
-            _, err = stmt.Exec("DONE", arg)
+        fmt.Printf("Added \"%s\" to your task list.\n", arg)
+    }
+}
+
+func doTask(arg string, dbConn *sqlx.DB) {
+    if arg == "--help" {
+        fmt.Println("  task do \"task_id\"         Mark task with \"task_id\" on your TODO list as complete")
+    } else {
+        taskId, err := strconv.Atoi(arg)
+        if err != nil {
+            panic(err.Error())
+        }
+        stmt, _ := dbConn.Prepare("Select * from tasks where id = ?")
+        taskRes, err := stmt.Query(taskId)
+        if err != nil {
+            panic(err.Error())
+        }
+        task := Task{}
+        if taskRes.Next() {
+            err = taskRes.Scan(&task.Id, &task.Description, &task.Status)
             if err != nil {
                 panic(err.Error())
             }
-            fmt.Printf("You have completed the \"%s\" task.\n", task.Description)
+            if task.Status != Done {
+                stmt, _ = dbConn.Prepare("UPDATE tasks set status = ? where id = ?")
+                _, err = stmt.Exec("DONE", taskId)
+                if err != nil {
+                    panic(err.Error())
+                }
+                fmt.Printf("You have completed the \"%s\" task.\n", task.Description)
+            } else {
+                fmt.Printf("You have already completed the \"%s\" task.\n", task.Description)
+            }
         } else {
-            fmt.Printf("You have already completed the \"%s\" task.\n", task.Description)
+            fmt.Printf("You have provided invalid task id.\n")
         }
-    } else {
-        fmt.Printf("You have provided invalid task id.\n")
     }
 }
 
@@ -101,11 +113,7 @@ func handleTripleArgCommand(arg1 string, arg2 string, dbConn *sqlx.DB) {
     case "add":
         addTask(arg2, dbConn)
     case "do":
-        id, err := strconv.Atoi(arg2)
-        if err != nil {
-            panic(err.Error())
-        }
-        doTask(id, dbConn)
+        doTask(arg2, dbConn)
     default:
         fmt.Println(InvalidCommandError)
     }
